@@ -1,6 +1,12 @@
 var fs = require('fs');
 var mime = require('mime').types;
 
+function serv(res, filename, data) {
+	var extension = filename.substr(filename.lastIndexOf('.') + 1, filename.length);
+	res.setHeader('content-type', mime[extension]);
+	res.setHeader('charset', 'utf-8');
+	res.end(data);
+}
 module.exports = function(rootdir, disallow_updir, return404) {
 	if (!return404) {
 		return404 = function(res404) {
@@ -15,9 +21,7 @@ module.exports = function(rootdir, disallow_updir, return404) {
 			fs.readFile(filename, function(err, data) {
 				if (err) return404(res);
 				else {
-					var extension = filename.substr(filename.lastIndexOf('.') + 1, filename.length);
-					res.setHeader('content-type', mime[extension]);
-					res.end(data);
+					serv(res, filename, data);
 					return true;
 				}
 			});
@@ -37,20 +41,12 @@ module.exports = function(rootdir, disallow_updir, return404) {
 						filename = filename.substr(0, filename.length - 11) + '.html';
 						fs.readFile(filename, function(err, data) {
 							if (err) return404(res);
-							else {
-								var extension = filename.substr(filename.lastIndexOf('.') + 1, filename.length);
-								res.setHeader('content-type', mime[extension]);
-								res.end(data);
-							}
+							else serv(res, filename, data);
 						});
 					}
 					else return404(res);
 				}
-				else {
-					var extension = filename.substr(filename.lastIndexOf('.') + 1, filename.length);
-					res.setHeader('content-type', mime[extension]);
-					res.end(data);
-				}
+				else serv(res, filename, data);
 			});
 		}
 	}

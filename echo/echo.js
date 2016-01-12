@@ -12,7 +12,7 @@ module.exports = function() {
 				hostname: parsed.hostname,
 				path: parsed.path,
 				query: parsed.query,
-				method: headers.method
+				method: headers.method || 'GET'
 			}, function(response) {
 				response.on('data', function(chunk) {
 					res.write(chunk);
