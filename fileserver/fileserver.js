@@ -1,11 +1,16 @@
 var fs = require('fs');
+const zlib = require('zlib');
 var mime = require('mime').types;
 
 function serv(res, filename, data) {
-	var extension = filename.substr(filename.lastIndexOf('.') + 1, filename.length);
-	res.setHeader('content-type', mime[extension]);
+	const mimeType = mime[filename.substr(filename.lastIndexOf('.') + 1, filename.length)];
+	res.setHeader('content-type', mimeType);
 	res.setHeader('charset', 'utf-8');
-	res.end(data);
+	if (mimeType.startsWith('text/') || mimeType == 'application/json') { //only compress text files
+		res.setHeader('content-encoding', 'gzip');
+		zlib.gzip(data, (err, zipped) => res.end(zipped));
+	}
+	else res.end(data);
 }
 module.exports = function(rootdir, disallow_updir, return404) {
 	if (!return404) {
