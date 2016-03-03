@@ -2,15 +2,20 @@ var fs = require('fs');
 const zlib = require('zlib');
 var mime = require('mime').types;
 
+function isText(mimeType) {
+	return mimeType.startsWith('text/') || mimeType == 'application/json' || mimeType == 'application/javascript';
+}
 function serv(res, filename, data) {
 	const mimeType = mime[filename.substr(filename.lastIndexOf('.') + 1, filename.length)];
-	res.setHeader('content-type', mimeType);
-	res.setHeader('charset', 'utf-8');
-	if (mimeType.startsWith('text/') || mimeType == 'application/json') { //only compress text files
-		res.setHeader('content-encoding', 'gzip');
+	if (isText(mimeType)) { //only compress text files
+		res.setHeader('Content-Type', mimeType + '; charset=UTF-8');
+		res.setHeader('Content-Encoding', 'gzip');
 		zlib.gzip(data, (err, zipped) => res.end(zipped));
 	}
-	else res.end(data);
+	else {
+		res.setHeader('Content-Type', mimeType);
+		res.end(data);
+	}
 }
 module.exports = function(rootdir, disallow_updir, return404) {
 	if (!return404) {
