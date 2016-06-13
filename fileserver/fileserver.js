@@ -9,6 +9,7 @@ function serv(res, fileName, statusCode) {
 	servStream(res, mime[fileName.substr(fileName.lastIndexOf('.') + 1, fileName.length)], fs.createReadStream(fileName), statusCode);
 }
 function servStream(res, mimeType, stream, statusCode) {
+	mimeType = mimeType || 'application/octet-stream';
 	statusCode = statusCode || 200;
 	if (isText(mimeType)) { //only compress text files
 		res.setHeader('Content-Type', mimeType + '; charset=UTF-8');
