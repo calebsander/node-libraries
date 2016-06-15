@@ -1,24 +1,56 @@
+var crypto = require('crypto');
 var fs = require('fs');
-const zlib = require('zlib');
+var zlib = require('zlib');
 var mime = require('mime').types;
 
 function isText(mimeType) {
 	return mimeType.startsWith('text/') || mimeType === 'application/json' || mimeType === 'application/javascript';
 }
-function serv(res, fileName, statusCode) {
-	servStream(res, mime[fileName.substr(fileName.lastIndexOf('.') + 1, fileName.length)], fs.createReadStream(fileName), statusCode);
+function createEtagHeaders(etag) {
+	return {
+		'Cache-Control': 'public, no-cache',
+		'ETag': etag
+	};
 }
-function servStream(res, mimeType, stream, statusCode) {
+function addHeaders(res, headers) {
+	if (headers) {
+		for (var header in headers) res.setHeader(header, headers[header]);
+	}
+}
+var IF_NONE_MATCH = 'If-None-Match'.toLowerCase();
+function servCachedFile(res, fileName, req, statusCode) {
+	var sentEtag = req.headers[IF_NONE_MATCH];
+	var hash = crypto.createHash('sha256');
+	hash.on('readable', function() {
+		var data = hash.read();
+		if (data) {
+			var etag = '"' + data.toString('base64') + '"';
+			if (sentEtag && sentEtag === etag) {
+				addHeaders(res, createEtagHeaders(etag));
+				res.writeHead(304);
+				res.end();
+			}
+			else servFile(res, fileName, statusCode, etag);
+		}
+	});
+	fs.createReadStream(fileName).pipe(hash);
+}
+function servFile(res, fileName, statusCode, etag) {
+	servStream(res, mime[fileName.substr(fileName.lastIndexOf('.') + 1, fileName.length)], fs.createReadStream(fileName), statusCode, createEtagHeaders(etag));
+}
+function servStream(res, mimeType, stream, statusCode, headers) {
 	mimeType = mimeType || 'application/octet-stream';
 	statusCode = statusCode || 200;
 	if (isText(mimeType)) { //only compress text files
 		res.setHeader('Content-Type', mimeType + '; charset=UTF-8');
 		res.setHeader('Content-Encoding', 'gzip');
+		addHeaders(res, headers);
 		res.writeHead(statusCode);
 		stream.pipe(zlib.createGzip()).pipe(res);
 	}
 	else {
 		res.setHeader('Content-Type', mimeType);
+		addHeaders(res, headers);
 		res.writeHead(statusCode);
 		stream.pipe(res);
 	}
@@ -35,14 +67,15 @@ module.exports = function(rootdir, disallow_updir, return404) {
 	}
 	else if (return404.constructor === String) {
 		return404 = (function(fileFor404) {
-			return function(res404) {
-				serv(res404, fileFor404, 404);
+			return function(res404, req) {
+				servCachedFile(res404, fileFor404, req, 404);
 			};
 		}(return404));
 	}
-	return function(res, url) {
+	return function(res, req) {
+		var url = req.url;
 		var fileName = rootdir + url;
-		if (disallow_updir && url.indexOf('..') !== -1) return404(res);
+		if (disallow_updir && url.indexOf('..') !== -1) return404(res, req);
 		else {
 			if (url.lastIndexOf('.') === -1) {
 				if (fileName[fileName.length - 1] === '/') {
@@ -58,19 +91,19 @@ module.exports = function(rootdir, disallow_updir, return404) {
 						if (tryFile) {
 							fileName = fileName.substr(0, fileName.length - FOLDER_TO_DEFAULT_FILE.length) + ENDING;
 							fs.stat(fileName, function(err, stats) {
-								if (err) return404(res);
-								else serv(res, fileName);
+								if (err) return404(res, req);
+								else servCachedFile(res, fileName, req);
 							});
 						}
-						else return404(res);
+						else return404(res, req);
 					}
-					else serv(res, fileName);
+					else servCachedFile(res, fileName, req);
 				});
 			}
 			else {
 				fs.stat(fileName, function(err, stats) {
-					if (err) return404(res);
-					else serv(res, fileName);
+					if (err) return404(res, req);
+					else servCachedFile(res, fileName, req);
 				});
 			}
 		}

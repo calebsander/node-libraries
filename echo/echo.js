@@ -1,12 +1,14 @@
 var http = require('http');
 var https = require('https');
+var servStream = require(__dirname + '/../fileserver/fileserver.js').servStream;
 var url = require('url');
 
+var CONTENT_TYPE = /[-\w]+\/[-\w]+/;
 module.exports = function() {
 	return function(res, headers) {
 		try {
 			var parsed = url.parse(headers.url, true);
-			if (parsed.protocol == 'http:') var requestlib = http;
+			if (parsed.protocol === 'http:') var requestlib = http;
 			else requestlib = https;
 			var request = requestlib.request({
 				hostname: parsed.hostname,
@@ -14,12 +16,8 @@ module.exports = function() {
 				query: parsed.query,
 				method: headers.method || 'GET'
 			}, function(response) {
-				response.on('data', function(chunk) {
-					res.write(chunk);
-				});
-				response.on('end', function() {
-					res.end();
-				});
+				var contentTypeMatch = CONTENT_TYPE.exec(response.headers['content-type']);
+				servStream(res, contentTypeMatch && contentTypeMatch[0], response, response.statusCode);
 			});
 			request.on('error', function(err) {
 				res.end();
