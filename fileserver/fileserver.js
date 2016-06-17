@@ -18,25 +18,49 @@ function addHeaders(res, headers) {
 	}
 }
 var IF_NONE_MATCH = 'If-None-Match'.toLowerCase();
+var hashCache = {};
 function servCachedFile(res, fileName, req, statusCode) {
 	var sentEtag = req.headers[IF_NONE_MATCH];
-	var hash = crypto.createHash('sha256');
-	hash.on('readable', function() {
-		var data = hash.read();
-		if (data) {
-			var etag = '"' + data.toString('base64') + '"';
-			if (sentEtag && sentEtag === etag) {
-				addHeaders(res, createEtagHeaders(etag));
-				res.writeHead(304);
-				res.end();
+	function compareHashAndSend() {
+		var hashResult = hashCache[fileName].hash;
+		var etag = '"' + hashResult + '"';
+		if (sentEtag && sentEtag === etag) {
+			addHeaders(res, createEtagHeaders(etag));
+			res.writeHead(304);
+			res.end();
+		}
+		else servFile(res, fileName, statusCode, etag);
+	}
+	function createNewHash() {
+		var hash = crypto.createHash('sha256');
+		hash.on('readable', function() {
+			var hashResult = hash.read();
+			if (hashResult) {
+				var hashString = hashResult.toString('base64');
+				hashCache[fileName].hash = hashString;
+				compareHashAndSend();
 			}
-			else servFile(res, fileName, statusCode, etag);
+		});
+		fs.createReadStream(fileName).pipe(hash);
+	}
+	fs.stat(fileName, (err, stats) => {
+		if (err) console.log(err); //file should exist already
+		else {
+			stats.mtime = stats.mtime.getTime();
+			if (hashCache[fileName]) {
+				if (stats.mtime <= hashCache[fileName].mtime) compareHashAndSend();
+				else createNewHash();
+			}
+			else {
+				hashCache[fileName] = {};
+				createNewHash();
+			}
+			hashCache[fileName].mtime = stats.mtime;
 		}
 	});
-	fs.createReadStream(fileName).pipe(hash);
 }
 function servFile(res, fileName, statusCode, etag) {
-	servStream(res, mime[fileName.substr(fileName.lastIndexOf('.') + 1, fileName.length)], fs.createReadStream(fileName), statusCode, createEtagHeaders(etag));
+	servStream(res, mime[fileName.substring(fileName.lastIndexOf('.') + 1)], fs.createReadStream(fileName), statusCode, createEtagHeaders(etag));
 }
 function servStream(res, mimeType, stream, statusCode, headers) {
 	mimeType = mimeType || 'application/octet-stream';
