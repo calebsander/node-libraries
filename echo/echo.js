@@ -17,7 +17,7 @@ module.exports = function() {
 				method: headers.method || 'GET'
 			}, function(response) {
 				var contentTypeMatch = CONTENT_TYPE.exec(response.headers['content-type']);
-				servStream(res, contentTypeMatch && contentTypeMatch[0], response, response.statusCode);
+				servStream(res, contentTypeMatch && contentTypeMatch[0], response, response.statusCode, response.headers);
 			});
 			request.on('error', function(err) {
 				res.end();
